@@ -4,6 +4,7 @@ from auth.schema import UserCreate, UserRead, UserUpdate
 from chat.router import router as chat_router
 from fastapi.middleware.cors import CORSMiddleware
 from pages.router import router as page_router
+from lot.router import router as lot_router
 
 app = FastAPI(title="Auction apps")
 
@@ -26,6 +27,7 @@ app.include_router(
 )
 app.include_router(page_router)
 app.include_router(chat_router)
+app.include_router(lot_router)
 
 origins = ["http://localhost:8000/"]
 
