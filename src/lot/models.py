@@ -15,6 +15,15 @@ class Lot(Base):
 
     bets = relationship("Bet", back_populates="lot",lazy="selectin")
 
+# class Image(Base):
+#     __tablename__ = "images"
+
+#     id = Column(Integer, primary_key=True, index=True)
+#     filename = Column(String)
+#     data = Column(String)
+
+#     lots = relationship("Lot", back_populates="image")
+
 class Bet(Base):
     __tablename__ = "bet"
     bet_id = Column(Integer, primary_key=True)

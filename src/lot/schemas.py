@@ -34,8 +34,26 @@ class GetLot(BaseModel):
     start_bet: int
     description: str
     end_date: datetime
+    image_data: bytes
 
     bets: list[GetBet] = []
 
     class Config:
         orm_mode = True
+
+class BetBase(BaseModel):
+    bet_id: int
+    user_id: int
+    lot_id: int
+    value: float
+    date: datetime
+
+
+class UpdateLot(BaseModel):
+    # id: int
+    start_bet: int
+    description: str
+    end_date: datetime
+
+    # bets: list[BetBase] = []
+
