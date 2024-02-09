@@ -1,3 +1,12 @@
+
+
+git clone https://github.com/camelCase0/int20-auction.git
+cd int20-auction
+nano .env-example
+cp .env-example .env
+docker compose up -d
+
+
 Run command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 alembic revision --autogenerate -m "User fix"

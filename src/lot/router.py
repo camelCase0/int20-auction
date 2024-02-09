@@ -166,6 +166,7 @@ async def delete_lot(lot_id:int, user:User= Depends(current_user), session:Async
     lot = await session.get(Lot,lot_id)
     if lot.owner_id != user.id:
         raise HTTPException(status_code=403, detail="You are not permited to delete this lot")
+    
     statement = delete(Lot).where(Lot.id == lot_id)
     await session.execute(statement)
     await session.commit()
