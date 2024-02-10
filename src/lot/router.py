@@ -144,12 +144,16 @@ async def create_bet(lot_id:int, new_value:int, user: User = Depends(current_use
     # mbet = await session.select(Bet).filter(Bet.lot_id==lot_id).order_by(Bet.value.desc()).limit(1)
     mbet = await session.execute(select(Bet).filter(Bet.lot_id == lot_id).order_by(desc(Bet.value)).limit(1))
 
-    max_bet = mbet.scalars().first().value
+    max_bet = mbet.scalars().first()
     if max_bet is None:
         max_bet = lot.start_bet
+    else:
+        max_bet = max_bet.value
 
     if (max_bet >= new_value):
         raise HTTPException(status_code=406, detail="Bet must be higher")
+    lot.start_bet = new_value
+    await session.commit()
 
     new_bet = Bet(
         user_id=user.id,
@@ -158,7 +162,7 @@ async def create_bet(lot_id:int, new_value:int, user: User = Depends(current_use
     )
     session.add(new_bet)
     await session.commit()
-    session.refresh(new_bet)
+    await session.refresh(new_bet)
     return new_bet
 
 @router.delete("/{lot_id}") # delete lot

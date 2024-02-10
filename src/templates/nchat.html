@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auction and Chat</title>
+</head>
+<body>
+    <h1>Auction</h1>
+    <div id="auction"></div>
+
+    <h2>Chat</h2>
+    <div id="chat"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/websocket/1.0.31/websocket.min.js"></script>
+    <script>
+        const auctionWebSocket = new WebSocket("ws://localhost:8000/auction/auction123/ws");
+        const chatWebSocket = new WebSocket("ws://localhost:8000/chat/id/ws/");
+
+        auctionWebSocket.onmessage = function(event) {
+            const auctionData = JSON.parse(event.data);
+            const auctionDiv = document.getElementById("auction");
+            auctionDiv.innerHTML = "";
+            auctionDiv.innerHTML += "<h3>Bids</h3>";
+            for (const bid of auctionData.bids) {
+                auctionDiv.innerHTML += `<p>Bid Amount: ${bid.bid_amount}</p>`;
+            }
+        };
+
+        chatWebSocket.onmessage = function(event) {
+            const chatMessage = event.data;
+            const chatDiv = document.getElementById("chat");
+            chatDiv.innerHTML += `<p>${chatMessage}</p>`;
+        };
+
+        function sendChatMessage() {
+            const chatInput = document.getElementById("chat-input");
+            const message = chatInput.value;
+            chatWebSocket.send(message);
+            chatInput.value = "";
+        }
+    </script>
+</body>
+</html>

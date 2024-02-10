@@ -1,6 +1,6 @@
 from typing import List
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Depends
 from pydantic import BaseModel
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from chat.models import Message
 from chat.schemas import MessagesModel
 from database import async_session_maker, get_async_session
+from lot.models import Lot
 
 router = APIRouter(
     prefix="/chat",
@@ -72,6 +73,17 @@ async def websocket_endpoint(websocket: WebSocket, chat_id:int, client_id: int):
         manager.disconnect(websocket)
         await manager.broadcast(f"Client #{client_id} left the chat",chat_id=chat_id, add_to_db=False)
     
+@router.websocket("/ws/bid/{lot_id}")
+async def websocket_bid_endpoint(websocket: WebSocket, lot_id: int, session: AsyncSession = Depends(get_async_session)):
+    
+    await websocket.accept()
+    while True:
+        data = await websocket.receive_text()
+        bid_value = float(data)
+        auction_item = await session.get(Lot, lot_id)
+        if auction_item is None:
+            raise HTTPException(status_code=404, detail="Auction item not found")
+        await websocket.send_text(f"{lot_id}:{bid_value}")
     # try:
     #     await websocket.accept()
     #     if chat_id not in chat_dict:

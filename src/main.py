@@ -6,6 +6,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pages.router import router as page_router
 from lot.router import router as lot_router
 
+import ssl
+
 app = FastAPI(title="Auction apps")
 
 app.include_router(
@@ -39,3 +41,6 @@ app.add_middleware(
     allow_headers=["Accept","Content-Type", "Set-Cookie", "Access-Control-Allow-Headers", "Access-Control-Allow-Origin",
                    "Authorization"],
 )
+
+ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+ssl_context.load_cert_chain('../../cert/cert.pem', keyfile='../../cert/key.pem')

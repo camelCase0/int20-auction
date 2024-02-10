@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Active Lots</h1>
+    <ul>
+        {% for lot in active_lots %}
+        <li>
+            <h2>{{ lot.name }}</h2>
+            <p>{{ lot.description }}</p>
+            <p>Start Time: {{ lot.start_time }}</p>
+            <p>End Time: {{ lot.end_time }}</p>
+            <img src="/images/{{ lot.image_filename }}" alt="{{ lot.name }}">
+        </li>
+        {% endfor %}
+    </ul>
+<script>
+    async function getLastMessages() {
+        const url = 'http://localhost:8000/chat/{{ lot_id }}/last_messages/'
+        const response = await fetch(url, {
+            method: 'GET'
+        })
+        return response.json()
+    }
+
+    getLastMessages()
+        .then(messages => {
+            appendMessage("Попередні 5 повідомлень:")
+            messages.forEach(msg => {
+                appendMessage(msg.text)
+            })
+            appendMessage("\nНові повідомлення:")
+        })
+
+    function appendMessage(msg) {
+        let messages = document.getElementById('messages')
+        let message = document.createElement('li')
+        let content = document.createTextNode(msg)
+        message.appendChild(content)
+        messages.appendChild(message)
+    }
+
+    let ws = new WebSocket(`ws://localhost:8000/chat/{{ lot_id }}/ws/{{ user_id }}`);
+    ws.onmessage = function (event) {
+        appendMessage(event.data)
+    };
+
+    function sendMessage(event) {
+        let input = document.getElementById("messageText")
+        ws.send(input.value)
+        input.value = ''
+        event.preventDefault()
+    }
+</script>
+{% endblock %}
