@@ -7,7 +7,12 @@ cp .env-example .env
 docker compose up -d
 
 
-Run command: uvicorn main:app --ssl-keyfile ../../cert/key.pem --ssl-certfile ../../cert/cert.pem --host 0.0.0.0 --port 8000 --reload
+Run command: 
+mkdir cert
+openssl req -x509 -newkey rsa:4096 -nodes -out cert/cert.pem -keyout cert/key.pem -days 365
 
-alembic revision --autogenerate -m "User fix"
+cd src
+uvicorn main:app --ssl-keyfile ../cert/key.pem --ssl-certfile ../cert/cert.pem --host 0.0.0.0 --port 8000 --reload
+
+#To make migration: alembic revision --autogenerate -m "Migration text"
 alembic upgrade head

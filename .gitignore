@@ -4,3 +4,4 @@
 .env
 .env-non-dev
 /cert
+src/images
