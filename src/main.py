@@ -31,7 +31,7 @@ app.include_router(page_router)
 app.include_router(chat_router)
 app.include_router(lot_router)
 
-origins = ["http://localhost:8000/"]
+origins = ["http://localhost:8000/","https://localhost:8000/"]
 
 app.add_middleware(
     CORSMiddleware,
@@ -43,4 +43,4 @@ app.add_middleware(
 )
 
 ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-ssl_context.load_cert_chain('../../cert/cert.pem', keyfile='../../cert/key.pem')
+ssl_context.load_cert_chain('../cert/cert.pem', keyfile='../cert/key.pem')
