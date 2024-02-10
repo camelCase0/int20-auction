@@ -3,6 +3,8 @@ from fastapi import File, UploadFile
 from pydantic import BaseModel
 from datetime import datetime
 
+from lot.models import Lot_type, Money_aim
+
 class CreateBet(BaseModel):
     lot_id: int
     bet_value: int
@@ -24,6 +26,25 @@ class CreateLot(BaseModel):
     start_bet: int
     description: str
     end_date: datetime
+    lot_type: Lot_type
+    money_aim: Money_aim
+
+    image_data: bytes
+
+    class Config:
+        orm_mode = True
+
+
+class GetLotAll(BaseModel):
+    id: int
+    owner_id: int
+    start_bet: int
+    description: str
+    end_date: datetime
+    lot_type: Lot_type
+    money_aim: Money_aim
+
+    image_data: bytes
 
     class Config:
         orm_mode = True
@@ -34,6 +55,9 @@ class GetLot(BaseModel):
     start_bet: int
     description: str
     end_date: datetime
+    lot_type: Lot_type
+    money_aim: Money_aim
+
     image_data: bytes
 
     bets: list[GetBet] = []
@@ -54,6 +78,10 @@ class UpdateLot(BaseModel):
     start_bet: int
     description: str
     end_date: datetime
+    lot_type: Lot_type
+    money_aim: Money_aim
+
+    image_data: bytes
 
     # bets: list[BetBase] = []
 

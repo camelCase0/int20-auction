@@ -9,11 +9,11 @@ from fastapi import APIRouter, File, UploadFile, Depends, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, select, func, delete
 from main import fastapi_users
-from lot.schemas import GetLot, CreateLot, UpdateLot
-from lot.models import Lot, Bet 
+from lot.schemas import GetLot, CreateLot, GetLotAll, UpdateLot
+from lot.models import Lot, Bet, Lot_type, Money_aim 
 from database import get_async_session
 from fastapi import HTTPException, status
-from typing import IO, Optional
+from typing import IO, List, Optional
 import filetype
 
 router = APIRouter(
@@ -28,6 +28,8 @@ current_user = fastapi_users.current_user()
 async def get_lots(session: AsyncSession = Depends(get_async_session)):
     lots = await session.execute(select(Lot))
     records = lots.scalars().all()
+    for record in records:
+        record.image_data = base64.b64encode(record.image_data).decode('utf-8')
     return records
 
 def validate_file_size_type(file: IO):
@@ -63,29 +65,42 @@ async def create_lot(
     user: User = Depends(current_user),
     start_bet: int = Body(...),
     description: str = Body(...),
+    lot_type: str = Body(...),
+    money_aim: str = Body(...),
     end_date: datetime = Body(None),
     file: UploadFile = File(...),
     session: AsyncSession = Depends(get_async_session)
     ):
+    contents = await file.read()
     validate_file_size_type(file)
 
-    new_op = Lot(start_bet=start_bet, description=description, end_date=end_date, owner_id=user.id)
+    encoded_image_data = base64.b64encode(contents)
+    # contents = file.read()
+
+    new_op = Lot(
+        start_bet=start_bet, 
+        description=description, 
+        end_date=end_date, 
+        owner_id=user.id,
+        lot_type=lot_type, 
+        money_aim=money_aim,
+        image_data=encoded_image_data)
     session.add(new_op)
     await session.commit()
-    session.refresh(new_op)
+    await session.refresh(new_op)
 
-    filename = f"{IMAGEDIR}{new_op.id}"
-    contents = await file.read()
-    os.makedirs(os.path.dirname(filename), exist_ok=True)
-    with open(filename,"wb") as f:
-        f.write(contents)
+    # filename = f"{IMAGEDIR}{new_op.id}"
+    # contents = await file.read()
+    # os.makedirs(os.path.dirname(filename), exist_ok=True)
+    # with open(filename,"wb") as f:
+    #     f.write(contents)
 
     return new_op
 
 @router.get("/{lot_id}/")#,response_model=GetLot
 async def get_lot_by_id(lot_id:int, session: AsyncSession = Depends(get_async_session)):
     lot = await session.get(Lot,lot_id)
-    file_path = f"{IMAGEDIR}{lot_id}"
+    # file_path = f"{IMAGEDIR}{lot_id}"
 
     if lot is None:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -94,14 +109,14 @@ async def get_lot_by_id(lot_id:int, session: AsyncSession = Depends(get_async_se
     bet_dicts = [{"lot_id": bet.lot_id,"bet_id": bet.bet_id, "bet_value": bet.value, "user_id": bet.user_id} for bet in lot.bets]
     
     
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="Image not found")
+    # if not os.path.exists(file_path):
+    #     raise HTTPException(status_code=404, detail="Image not found")
     
-    with open(file_path, 'rb') as f:
-        image_data = f.read()
+    # with open(file_path, 'rb') as f:
+    #     image_data = f.read()
     
     # FileResponse(path=file_path, filename=lot_id, media_type='multipart/form-data'),
-    image_data = base64.b64encode(image_data).decode('utf-8')
+    # image_data = base64.b64encode(image_data).decode('utf-8')
 
     response_lot = GetLot(
         id=lot.id,
@@ -109,7 +124,9 @@ async def get_lot_by_id(lot_id:int, session: AsyncSession = Depends(get_async_se
         start_bet=lot.start_bet,
         description=lot.description,
         end_date=lot.end_date,
-        image_data=image_data,
+        image_data=lot.image_data,
+        lot_type=lot.lot_type,
+        money_aim=lot.money_aim,
         bets=bet_dicts #
     )
 
@@ -128,6 +145,9 @@ async def update_lot_by_id(lot_id:int, form:UpdateLot, user:User = Depends(curre
     lot.start_bet = form.start_bet
     lot.description = form.description
     lot.end_date = form.end_date
+    lot.lot_type=form.lot_type
+    lot.image_data=form.image_data
+    lot.money_aim=form.money_aim
 
     await session.commit()
     session.refresh(lot)
