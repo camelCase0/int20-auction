@@ -4,16 +4,18 @@ from io import BytesIO
 import os
 
 from fastapi.responses import FileResponse
+import jwt
 from auth.models import User
-from fastapi import APIRouter, File, UploadFile, Depends, Body
+from fastapi import APIRouter, File, UploadFile, Depends, Body, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import desc, select, func, delete
+from config import SECRET_COOK
 from main import fastapi_users
 from lot.schemas import GetLot, CreateLot, GetLotAll, UpdateLot
 from lot.models import Lot, Bet, Lot_type, Money_aim 
-from database import get_async_session
+from database import get_async_session, async_session_maker
 from fastapi import HTTPException, status
-from typing import IO, List, Optional
+from typing import IO, Dict, List, Optional
 import filetype
 
 router = APIRouter(
@@ -201,86 +203,113 @@ async def delete_lot(lot_id:int, user:User= Depends(current_user), session:Async
 
 # @router.get("/{lot_id}/", status_code=201)
 ############################################
-# class AuctionConnectionManager:
-#     def __init__(self):
-#         self.auction_connections: Dict[any, list] = {}
+class AuctionConnectionManager:
+    def __init__(self):
+        self.auction_connections: Dict[any, list] = {}
 
-#     async def connect(self, websocket: WebSocket, auction_id):
-#         await websocket.accept()
-#         item_found = session.get(AuctionItem, auction_id)
-#         #print(item_found)
-#         if (item_found.ends and item_found.ends < datetime.datetime.now()) \
-#                 or item_found.completed:
-#             item_found.completed = True
-#             await self.send_personal_message("The auction is already finished!",
-#                                          websocket)
-#             await self.send_personal_message(f"{item_found.item_name} was sold for {item_found.bid}"
-#                                              f" to a bidder #{item_found.bidder_id}!",
-#                                              websocket)
-#             await self.send_personal_message(message="", websocket=websocket,
-#                                              json_data={'completed': True})
-#             session.commit()
-#             return
-#         cur_bid = item_found.bid
+    async def connect(self, websocket: WebSocket, lot_id):
+        await websocket.accept()
+       
+        if not self.auction_connections.get(lot_id):
+            self.auction_connections[lot_id] = []
+        self.auction_connections[lot_id].append(websocket)
 
-#         if cur_bid:
-#             await self.send_personal_message("The auction has already started!",
-#                                              websocket, cur_bid)
-#         if not self.auction_connections.get(auction_id):
-#             self.auction_connections[auction_id] = []
-#         self.auction_connections[auction_id].append(websocket)
+    async def disconnect(self, websocket: WebSocket, lot_id):
+        self.auction_connections[lot_id].remove(websocket)
 
-#     async def disconnect(self, websocket: WebSocket, auction_id):
-#         self.auction_connections[auction_id].remove(websocket)
+    async def send_personal_message(self, message: str, websocket: WebSocket,
+                                    cur_price=None, json_data=None):
+        await websocket.send_text(message)
+        if cur_price:
+            await websocket.send_json({'new_value': cur_price})
+        if json_data:
+            #print(json_data)
+            await websocket.send_json({'json_data': json_data})
 
-#     async def send_personal_message(self, message: str, websocket: WebSocket,
-#                                     cur_price=None, json_data=None):
-#         await websocket.send_text(message)
-#         if cur_price:
-#             await websocket.send_json({'new_price': cur_price})
-#         if json_data:
-#             #print(json_data)
-#             await websocket.send_json({'json_data': json_data})
+    async def broadcast(self, message: str, user_id:int, new_value:int, lot_id: id):
+        for connection in self.auction_connections.get(lot_id):
+            await self.add_messages_to_database(user_id, new_value, lot_id)
+            await connection.send_text(message)
+            payload = {}
+            if new_value:
+                payload = {'new_value': new_value,
+                           'user_id': user_id}
+            if payload.keys():
+                await connection.send_json(payload)
+    @staticmethod
+    async def add_messages_to_database(user_id:int, new_value:int, lot_id: id):
+        async with async_session_maker() as session:
+            
+            item = await session.get(Lot, lot_id)
+            
+            item.start_bet = new_value
+            await session.commit()
 
-#     async def broadcast(self, message: str, auction_id: int, new_price=None, ends=None):
-#         for connection in self.auction_connections.get(auction_id):
-#             await connection.send_text(message)
-#             payload = {}
-#             if new_price:
-#                 payload = {'new_price': new_price}
-#             if ends:
-#                 payload.update(ends=str(ends))
-#             if payload.keys():
-#                 await connection.send_json(payload)
+            new_bet = Bet(
+                    user_id=user_id,
+                    value=new_value,
+                    lot_id=lot_id
+                )
+            session.add(new_bet)
+            await session.commit()
+    
+    @staticmethod
+    async def get_lot(lot_id:int):
+        async with async_session_maker() as session:
+             lot_found = await session.get(Lot, lot_id)
+             return lot_found
 
 
-# manager = AuctionConnectionManager()
+manager = AuctionConnectionManager()
+session = get_async_session()
+@router.websocket('/{lot_id}/ws/bets/')
+async def auction(websocket: WebSocket, lot_id: int):
+    await manager.connect(websocket, lot_id)
+    try:
+        cookie = websocket._cookies['Auction']
+        ss = jwt.decode(cookie, SECRET_COOK, audience='fastapi-users:auth', algorithms=["HS256"])
+        user_id = ss['sub']
+        if user_id:
+            while True:
+                user_id = int(user_id)
+                data = await websocket.receive_json()
+                new_value = data.get('new_value')
+                if not new_value:
+                    continue
+                new_value = int(new_value)     
+                item = await manager.get_lot(lot_id)
+                if not item:
+                    continue         
+                if item.start_bet>=new_value:
+                    continue  
+                if (item.end_date < datetime.utcnow()):
+                    await manager.send_personal_message("The auction is already finished!", websocket)
+                    await manager.send_personal_message(f"{item.id} was sold for {item.start_bet}!", websocket)
+                    await manager.send_personal_message(message="", websocket=websocket, json_data={'completed': True})
+                    
+                await manager.broadcast(f"Participant {user_id} has bid {item.start_bet}!", 
+                                        lot_id=lot_id, 
+                                        user_id=user_id,
+                                        new_value=new_value)
+                
+                # item = await session.get(Lot, lot_id)
+                # if item.start_bet>=new_value:
+                #     continue
+                # item.start_bet = new_value
+                # await session.commit()
 
-# @router.websocket('/auction/{id}/ws/{participant_id}')
-# async def auction(websocket: WebSocket, id: int, participant_id: int):
-#     await manager.connect(websocket, id)
-#     try:
-#         while True:
-#             data = await websocket.receive_json()
-#             item = session.get(AuctionItem, id)
-#             step = item.price_step | 0
-#             current_bid = item.bid or 0
-#             min_new_bid = current_bid + step if current_bid != item.min_price else current_bid
-#             new_bid = data.get('bid')
-#             if not new_bid:
-#                 print(1)
-#                 continue
-#             if participant_id == item.bidder_id or not new_bid > current_bid:
-#                 print(2)
-#                 continue
-#             if item.min_price <= new_bid >= min_new_bid:
-#                 item.bid = new_bid
-#                 item.bidder_id = participant_id
-#                 item.ends = datetime.datetime.now() + datetime.timedelta(seconds=60)
-#                 await manager.broadcast(f"Participant {participant_id} has bid {item.bid}!", auction_id=id, new_price=item.bid,
-#                                         ends=item.ends)
-#                 session.commit()
+                # new_bet = Bet(
+                #     user_id=user_id,
+                #     value=new_value,
+                #     lot_id=lot_id
+                # )
+                # session.add(new_bet)
+                # await session.commit()
+                # await session.refresh(new_bet)
 
-#     except WebSocketDisconnect:
-#         await manager.disconnect(websocket, id)
-#         await manager.broadcast(f"Participant has left the auction", auction_id=id)
+                # await manager.broadcast(f"Participant {user_id} has bid {item.start_bet}!", auction_id=lot_id, new_value=new_bet.value)
+                # session.commit()
+
+    except WebSocketDisconnect:
+        await manager.disconnect(websocket, lot_id)
+        await manager.broadcast(f"Participant {user_id} has left the auction", auction_id=lot_id)

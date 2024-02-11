@@ -1,14 +1,18 @@
 from typing import List
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect, Depends
+import jwt
 from pydantic import BaseModel
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from auth.models import User
 
 from chat.models import Message
 from chat.schemas import MessagesModel
 from database import async_session_maker, get_async_session
 from lot.models import Lot
+from main import fastapi_users
+from config import SECRET_COOK
 
 router = APIRouter(
     prefix="/chat",
@@ -47,7 +51,6 @@ class ConnectionManager:
             await session.commit()
 
 
-
 @router.get("/{lot_id}/last_messages/")
 async def get_last_messages(lot_id:int,
         session: AsyncSession = Depends(get_async_session)
@@ -56,34 +59,50 @@ async def get_last_messages(lot_id:int,
     messages = await session.execute(query)
     return messages.scalars().all()
 
-chat_dict = {}
-@router.websocket("/{chat_id}/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, chat_id:int, client_id: int):
-    if chat_id not in chat_dict:
-        manager = ConnectionManager()
-        chat_dict[chat_id] = manager
 
-    manager = chat_dict[chat_id]
-    await manager.connect(websocket)
+chat_dict = {}
+
+async def websocket_auth(
+    websocket: WebSocket
+):
     try:
-        while True:
-            data = await websocket.receive_text()
-            await manager.broadcast(f"Client #{client_id} says: {data}",chat_id=chat_id, add_to_db=True)
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-        await manager.broadcast(f"Client #{client_id} left the chat",chat_id=chat_id, add_to_db=False)
+        cookie = websocket._cookies['Auction']
+        session = jwt.decode(cookie, SECRET_COOK, audience='fastapi-users:auth')
+    except:
+        return None
+    if session is None:
+        return None
+    return cookie
+
+current_user = fastapi_users.current_user()
+@router.websocket("/{chat_id}/ws/")
+async def websocket_endpoint(websocket: WebSocket, chat_id:int):
+    cookie = websocket._cookies['Auction']
+    ss = jwt.decode(cookie, SECRET_COOK, audience='fastapi-users:auth', algorithms=["HS256"])
+    # auth_success = await websocket_auth(websocket=websocket)
+    # cookie = websocket.cookies.get("Auction")
+    # user = await fastapi_users.get_current_user(cookie)
+    # payload = jwt.decode(cookie, SECRET_COOK, algorithms=[ALGORITHM])
+    if ss:
+        client_id = ss['sub']
+        if chat_id not in chat_dict:
+            manager = ConnectionManager()
+            chat_dict[chat_id] = manager
+
+        manager = chat_dict[chat_id]
+        await manager.connect(websocket)
+        try:
+            while True:
+                data = await websocket.receive_text()
+                await manager.broadcast(f"Client #{client_id} says: {data}",chat_id=chat_id, add_to_db=True)
+        except WebSocketDisconnect:
+            manager.disconnect(websocket)
+            await manager.broadcast(f"Client #{client_id} left the chat",chat_id=chat_id, add_to_db=False)
+        
+    else:
+        await websocket.close()
     
-@router.websocket("/ws/bid/{lot_id}")
-async def websocket_bid_endpoint(websocket: WebSocket, lot_id: int, session: AsyncSession = Depends(get_async_session)):
     
-    await websocket.accept()
-    while True:
-        data = await websocket.receive_text()
-        bid_value = float(data)
-        auction_item = await session.get(Lot, lot_id)
-        if auction_item is None:
-            raise HTTPException(status_code=404, detail="Auction item not found")
-        await websocket.send_text(f"{lot_id}:{bid_value}")
     # try:
     #     await websocket.accept()
     #     if chat_id not in chat_dict:

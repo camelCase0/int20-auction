@@ -8,7 +8,7 @@ from config import SECRET_COOK
 cookie_transport = CookieTransport(cookie_name="Auction", cookie_max_age=3600)
 
 def get_jwt_strategy() -> JWTStrategy:
-    return JWTStrategy(secret=SECRET_COOK, lifetime_seconds=3600)
+    return JWTStrategy(secret=SECRET_COOK, lifetime_seconds=3600, algorithm="HS256")
 
 
 auth_backend = AuthenticationBackend(
