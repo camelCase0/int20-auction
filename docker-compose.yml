@@ -19,3 +19,11 @@ services:
       - ${APP_PORT}:8000
     depends_on:
       - db
+
+  client:
+    image: nginx
+    container_name: frontend_auction
+    ports:
+        - 8080:80
+    volumes:
+        - ./frontend:/usr/share/nginx/html

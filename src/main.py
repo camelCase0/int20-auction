@@ -31,7 +31,7 @@ app.include_router(page_router)
 app.include_router(chat_router)
 app.include_router(lot_router)
 
-origins = ["http://localhost:8000/","https://localhost:8000/"]
+origins = ["http://localhost:8000/","https://localhost:8000/", "http://127.0.0.1:5500", "http://64.225.5.39:8080", "http://localhost:8080"]
 
 app.add_middleware(
     CORSMiddleware,

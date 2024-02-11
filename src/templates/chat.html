@@ -59,14 +59,6 @@
         document.getElementById("bidData").innerText = event.data;
     };
 
-    // let bidSocket = new WebSocket(`ws://localhost:8000/chat/ws/bid/{{ lot_id }}`);
-    // bidSocket.onmessage = function(event) {
-    //     const data = event.data.split(":");
-    //     const lotId = data[0];
-    //     const bidValue = data[1];
-    //     document.getElementById("bidData").innerText = `Lot ${lotId}: Current highest bid: ${bidValue}`;
-    // };
-
     function sendMessage(event) {
         let input = document.getElementById("messageText");
         ws.send(input.value);

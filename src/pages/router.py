@@ -1,20 +1,18 @@
+import requests
 from fastapi import APIRouter, Request, Depends
 from fastapi.templating import Jinja2Templates
-
 from auth.models import User
 from lot.schemas import GetLot
 
 router = APIRouter(
-    prefix="/pages",
     tags=["Pages"]
 )
 
 templates = Jinja2Templates(directory="templates")
 
-
-@router.get("/base")
+@router.get("/")
 def get_base_page(request: Request):
-    return templates.TemplateResponse("base.html", {"request": request})
+    return templates.TemplateResponse("index.html", {"request": request})
 
 from main import fastapi_users
 current_user = fastapi_users.current_user()
