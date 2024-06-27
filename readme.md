@@ -28,7 +28,7 @@ uvicorn main:app --ssl-keyfile ../cert/key.pem --ssl-certfile ../cert/cert.pem -
 alembic revision --autogenerate -m "Migration text"
 alembic upgrade head
 ```
-## Розгортання посилання на веб-додаток
+## Result
 
 `https://localhost:8000/docs`  - documentation backend
 
